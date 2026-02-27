@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>おやこ時計 - 修正版</title>
+    <style>
+        :root {
+            --primary-color: #333;
+            --bg-color: #F7FFF7;
+            --clock-face-color: #fefefe;
+            --clock-frame-color: #fff;
+            --stitching-color: #ccc;
+        }
+
+        body {
+            font-family: 'Helvetica Neue', Arial, 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', sans-serif;
+            background-color: var(--bg-color);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            padding: 2.5rem;
+            border-radius: 40px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            text-align: center;
+            width: 100%;
+            max-width: 400px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 20px; /* 要素間の隙間を一定に保つ */
+        }
+
+        h1 { font-size: 1.5rem; margin: 0; color: #555; }
+
+        /* --- 菱形時計のデザイン --- */
+        .clock-outer {
+            /* 外側のコンテナに十分な高さを確保して、文字との重なりを防ぐ */
+            position: relative;
+            width: 320px;
+            height: 320px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin: 20px 0;
+        }
+
+        .clock-frame {
+            position: absolute;
+            width: 220px; /* 菱形の対角線のサイズを調整 */
+            height: 220px;
+            background-color: var(--clock-frame-color);
+            border-radius: 20px;
+            border: 2px solid var(--stitching-color);
+            box-shadow: 5px 5px 20px rgba(0,0,0,0.1);
+            transform: rotate(45deg); /* ここで菱形にする */
+        }
+
+        .clock-face {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            /* 針と目盛りを配置するための基準点（回転させない） */
+            z-index: 2;
+        }
+
+        /* 数字と点の配置 */
+        .marker {
+            position: absolute;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            color: #222;
+        }
+
+        .number {
+            font-size: 2rem;
+            font-weight: 900;
+        }
+
+        .dot {
+            width: 10px;
+            height: 10px;
+            background-color: #222;
+            border-radius: 50%;
+        }
+
+        /* 針のデザイン */
+        .hand {
+            position: absolute;
+            bottom: 50%; /* 中心から上に伸ばす */
+            left: 50%;
+            transform-origin: bottom center; /* 回転の軸を「下側の中心」に固定 */
+            background-color: #1a1a1a;
+            border-radius: 10px;
+            transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        .hour-hand {
+            width: 10px;
+            height: 60px;
+            margin-left: -5px; /* 幅の半分だけ左にずらして中央揃え */
+            z-index: 4;
+        }
+
+        .minute-hand {
+            width: 6px;
+            height: 95px;
+            margin-left: -3px;
+            z-index: 3;
+        }
+
+        .center-dot {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 16px;
+            height: 16px;
+            background: #111;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 5;
+        }
+
+        /* --- テキストと入力 --- */
+        .message {
+            font-size: 1.6rem;
+            font-weight: bold;
+            color: #222;
+            margin: 10px 0;
+        }
+
+        .controls {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        select {
+            padding: 10px 15px;
+            font-size: 1.2rem;
+            border-radius: 12px;
+            border: 2px solid #ddd;
+            background: #fff;
+            cursor: pointer;
+        }
+
+        .label-text { font-weight: bold; color: #666; }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>⏰ なんじに おわる？</h1>
+        
+        <div class="clock-outer">
+            <div class="clock-frame"></div>
+            
+            <div class="clock-face" id="clockFace">
+                <div class="center-dot"></div>
+                <div class="hand hour-hand" id="hourHand"></div>
+                <div class="hand minute-hand" id="minHand"></div>
+                </div>
+        </div>
+
+        <div class="message" id="timeDisplay">12時00分</div>
+
+        <div class="controls">
+            <span class="label-text">じかん：</span>
+            <select id="hourSelect"></select>
+            <select id="minSelect"></select>
+        </div>
+    </div>
+
+    <script>
+        const clockFace = document.getElementById('clockFace');
+        const hourHand = document.getElementById('hourHand');
+        const minHand = document.getElementById('minHand');
+        const hourSelect = document.getElementById('hourSelect');
+        const minSelect = document.getElementById('minSelect');
+        const timeDisplay = document.getElementById('timeDisplay');
+
+        // 文字盤の生成
+        function initClock() {
+            const radius = 100; // 文字盤の半径
+            for (let i = 1; i <= 12; i++) {
+                const angle = (i * 30) * (Math.PI / 180);
+                const x = 50 + (radius * Math.sin(angle)) / 3.2; // %表記のため調整
+                const y = 50 - (radius * Math.cos(angle)) / 3.2;
+
+                const marker = document.createElement('div');
+                marker.className = 'marker';
+                marker.style.left = `calc(50% + ${radius * Math.sin(angle)}px)`;
+                marker.style.top = `calc(50% - ${radius * Math.cos(angle)}px)`;
+
+                if ([3, 6, 9, 12].includes(i)) {
+                    marker.classList.add('number');
+                    marker.innerText = i;
+                } else {
+                    marker.classList.add('dot');
+                }
+                clockFace.appendChild(marker);
+            }
+
+            // セレクトボックス生成
+            for (let i = 1; i <= 12; i++) {
+                const opt = document.createElement('option');
+                opt.value = i; opt.text = i + '時';
+                hourSelect.appendChild(opt);
+            }
+            for (let i = 0; i < 60; i++) {
+                const opt = document.createElement('option');
+                opt.value = i; opt.text = i.toString().padStart(2, '0') + '分';
+                minSelect.appendChild(opt);
+            }
+        }
+
+        function update() {
+            const h = parseInt(hourSelect.value);
+            const m = parseInt(minSelect.value);
+            
+            const hDeg = (h % 12) * 30 + (m / 60) * 30;
+            const mDeg = m * 6;
+
+            hourHand.style.transform = `translateX(-50%) rotate(${hDeg}deg)`;
+            minHand.style.transform = `translateX(-50%) rotate(${mDeg}deg)`;
+            timeDisplay.innerText = `${h}時${m.toString().padStart(2, '0')}分`;
+        }
+
+        hourSelect.addEventListener('change', update);
+        minSelect.addEventListener('change', update);
+
+        initClock();
+        update();
+    </script>
+</body>
+</html>
