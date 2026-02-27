@@ -237,8 +237,21 @@
         hourSelect.addEventListener('change', update);
         minSelect.addEventListener('change', update);
 
-        initClock();
-        update();
+        // 初期化実行
+initClock();
+
+// --- ここから追加 ---
+const now = new Date();
+let currentHour = now.getHours();
+// 12時間表記に変換 (0時は12時とする)
+currentHour = currentHour % 12;
+if (currentHour === 0) currentHour = 12;
+
+hourSelect.value = currentHour;
+minSelect.value = now.getMinutes();
+// --- ここまで追加 ---
+
+update();
     </script>
 </body>
 </html>
