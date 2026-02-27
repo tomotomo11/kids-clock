@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>おやこ時計 - なんどでも確認</title>
+    <title>おやこ時計 - 音楽再生改善版</title>
     <style>
         :root {
             --primary-color: #333;
@@ -129,29 +129,28 @@
             transition: all 0.1s;
             color: white;
             flex: 1;
-            max-width: 150px;
         }
 
-        .current-btn {
-            background-color: var(--current-btn-color);
-            box-shadow: 0 4px 0 #3da8a0;
-        }
+        .current-btn { background-color: var(--current-btn-color); box-shadow: 0 4px 0 #3da8a0; }
+        .start-btn { background-color: var(--accent-color); box-shadow: 0 4px 0 #d64545; }
+        .stop-music-btn { background-color: #666; box-shadow: 0 4px 0 #444; margin-top: 10px; display: none; }
 
-        .start-btn {
-            background-color: var(--accent-color);
-            box-shadow: 0 4px 0 #d64545;
-        }
+        button:active { transform: translateY(3px); box-shadow: none !important; }
 
-        button:active {
-            transform: translateY(3px);
-            box-shadow: none !important;
+        /* 動画を隠さない（サイズを最小化して配置） */
+        #youtube-container {
+            position: absolute;
+            top: -1000px;
+            left: -1000px;
+            opacity: 0;
+            pointer-events: none;
         }
     </style>
 </head>
 <body>
 
     <div class="container">
-        <h1>⏰ あとどれくらい？</h1>
+        <h1>⏰ やくそくの じかん</h1>
         
         <div class="clock-outer">
             <div class="clock-frame"></div>
@@ -162,9 +161,7 @@
             </div>
         </div>
 
-        <div class="message">
-            やくそく：<span class="target-time" id="targetDisplay">--時--分</span>
-        </div>
+        <div class="message">やくそく：<span class="target-time" id="targetDisplay">--時--分</span></div>
 
         <div class="controls">
             <div class="select-group">
@@ -173,13 +170,50 @@
             </div>
             
             <div class="button-group">
-                <button class="current-btn" onclick="resetToCurrentTime()">いまの時間</button>
-                <button class="start-btn" onclick="startAnimation()">スタート！</button>
+                <button class="current-btn" onclick="resetToCurrentTime()">いま</button>
+                <button class="start-btn" id="startBtn" onclick="startAnimation()">スタート</button>
             </div>
+            <button id="stopMusicBtn" class="stop-music-btn" onclick="stopMusic()">おんがくを とめる</button>
         </div>
     </div>
 
+    <div id="youtube-container">
+        <div id="player"></div>
+    </div>
+
     <script>
+        let player;
+        let apiReady = false;
+        const stopMusicBtn = document.getElementById('stopMusicBtn');
+
+        // YouTube IFrame APIの読み込み
+        const tag = document.createElement('script');
+        tag.src = "https://www.youtube.com/iframe_api";
+        const firstScriptTag = document.getElementsByTagName('script')[0];
+        firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+
+        function onYouTubeIframeAPIReady() {
+            player = new YT.Player('player', {
+                height: '200',
+                width: '200',
+                videoId: 'x2rvSInV-v0', // Mrs. GREEN APPLE - 僕のこと
+                playerVars: {
+                    'autoplay': 0,
+                    'playsinline': 1,
+                    'start': 84
+                },
+                events: {
+                    'onReady': onPlayerReady
+                }
+            });
+        }
+
+        function onPlayerReady(event) {
+            apiReady = true;
+            // 一度小さな音で再生してすぐ止めることで、ブラウザに「音を出す準備」を認識させる（回避策）
+            event.target.setVolume(100);
+        }
+
         const hourHand = document.getElementById('hourHand');
         const minHand = document.getElementById('minHand');
         const hourSelect = document.getElementById('hourSelect');
@@ -212,62 +246,78 @@
                 opt.value = i; opt.text = i.toString().padStart(2, '0') + '分';
                 minSelect.appendChild(opt);
             }
-
             resetToCurrentTime();
         }
 
-        // 現在時刻に戻す（アニメーションなし）
         function resetToCurrentTime() {
             const now = new Date();
-            const h = now.getHours();
-            const m = now.getMinutes();
-            
-            // transitionを一時的に消してパッと戻す
             hourHand.style.transition = 'none';
             minHand.style.transition = 'none';
-            
-            const currentTotalMinutes = h * 60 + m;
-            updateHandsByMinutes(currentTotalMinutes);
+            updateHandsByMinutes(now.getHours() * 60 + now.getMinutes());
         }
 
         function updateHandsByMinutes(totalMin) {
-            const hDeg = (totalMin / 60) * 30;
-            const mDeg = (totalMin % 60) * 6;
-            
-            hourHand.style.transform = `translateX(-50%) rotate(${hDeg}deg)`;
+            hourHand.style.transform = `translateX(-50%) rotate(${(totalMin / 60) * 30}deg)`;
             minHand.style.transform = `translateX(-50%) rotate(${totalMin * 6}deg)`;
         }
 
+        let alarmTimer;
+
         function startAnimation() {
+            stopMusic(); 
+            // ユーザーがクリックしたこのタイミングで、無音の再生を試みて「再生権限」を得る
+            if(apiReady && player) {
+                player.playVideo();
+                setTimeout(() => { player.pauseVideo(); player.seekTo(84); }, 100);
+            }
+
             const targetH = parseInt(hourSelect.value);
             const targetM = parseInt(minSelect.value);
             targetDisplay.innerText = `${targetH}時${targetM.toString().padStart(2, '0')}分`;
 
             const now = new Date();
             const startTotalMin = now.getHours() * 60 + now.getMinutes();
-
             let targetTotalMin = targetH * 60 + targetM;
-            while (targetTotalMin <= startTotalMin) {
-                targetTotalMin += 12 * 60;
-            }
+            while (targetTotalMin <= startTotalMin) { targetTotalMin += 12 * 60; }
 
             const diffMin = targetTotalMin - startTotalMin;
             const duration = Math.min(Math.max(diffMin * 0.05, 2.5), 6); 
 
-            // 一度いまの時間にセット
             resetToCurrentTime();
 
-            // 少し時間を置いてアニメーション開始
             setTimeout(() => {
                 hourHand.style.transition = `transform ${duration}s cubic-bezier(0.4, 0, 0.2, 1)`;
                 minHand.style.transition = `transform ${duration}s cubic-bezier(0.4, 0, 0.2, 1)`;
-                
-                const finalHourDeg = (targetTotalMin / 60) * 30;
-                const finalMinDeg = targetTotalMin * 6;
-
-                hourHand.style.transform = `translateX(-50%) rotate(${finalHourDeg}deg)`;
-                minHand.style.transform = `translateX(-50%) rotate(${finalMinDeg}deg)`;
+                updateHandsByMinutes(targetTotalMin);
             }, 50);
+
+            if(alarmTimer) clearInterval(alarmTimer);
+            alarmTimer = setInterval(() => {
+                const currentTime = new Date();
+                const curH = currentTime.getHours() % 12 || 12;
+                const curM = currentTime.getMinutes();
+                if(curH === targetH && curM === targetM) {
+                    playMusic();
+                    clearInterval(alarmTimer);
+                }
+            }, 1000);
+        }
+
+        function playMusic() {
+            if (apiReady && player) {
+                player.seekTo(84);
+                player.playVideo();
+                stopMusicBtn.style.display = 'block';
+            } else {
+                alert("音楽の準備ができていません。もう一度スタートを押してください。");
+            }
+        }
+
+        function stopMusic() {
+            if (apiReady && player) {
+                player.pauseVideo();
+                stopMusicBtn.style.display = 'none';
+            }
         }
 
         init();
